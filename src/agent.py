@@ -2,6 +2,7 @@ import gym
 import torch
 import numpy as np
 from models.q_table import Q_Table
+from util.bitmask import BitMask
 import collections
 
 # todo convert all of this to pytorch so we can use autograd :)
@@ -13,15 +14,16 @@ class Agent():
         self.obs_size = np.prod(env.observation_space.shape).astype(int)
         self.action_size = np.prod(env.action_space.shape).astype(int)
 
-        self.max_attentional_state = int('1' * self.obs_size, base=2)
-        self.max_affordance_state = int('1' * self.action_size, base=2)
+        # self.max_attentional_state = int('1' * self.obs_size, base=2)
+        # self.max_affordance_state = int('1' * self.action_size, base=2)
 
         self.past_qs = collections.deque(maxlen=window_size)
 
-        self.goal_model = Q_Table((100,100,self.obs_size, 2), alpha, gamma, epsilon)
+        self.goal_model = Q_Table((self.obs_size, 100,100, 2), alpha, gamma, epsilon)
         self.attentional_model = Q_Table((self.obs_size, 2), alpha, gamma, epsilon)
-        self.affordance_model = Q_Table((100,100,self.obs_size, 2), alpha, gamma, epsilon)
-        self.experiential_model = Q_Table((100,100,self.obs_size, self.action_size), alpha, gamma, epsilon)
+        self.affordance_model = Q_Table((self.obs_size, 100,100, 2), alpha, gamma, epsilon)
+        self.experiential_model = Q_Table((self.obs_size, 100,100, self.action_size), alpha, gamma, epsilon)
+
 
     # function for running through the episodes
     def run(self):
@@ -37,8 +39,8 @@ class Agent():
             states = np.append((emotive_state, arousal_state), environmental_state).astype(int)
 
             subgoal_state = np.random.choice(np.arange(self.obs_size))
-            attentional_state = np.random.randint(0, self.max_attentional_state)
-            affordance_state = np.random.randint(0, self.max_affordance_state)
+            attentional_state = BitMask(self.obs_size)
+            affordance_state = BitMask(self.action_size)
 
             done = False
             iterations = 0
@@ -61,21 +63,18 @@ class Agent():
                 # attention model
                 print('attention model')
                 attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([-1, 1]))
-                attentional_state += attentional_action
-                attentional_state = max(attentional_state, self.max_attentional_state)
+                attentional_state = attentional_state.add_one() if attentional_action == 1 else attentional_state.subtract_one()
 
                 # affordance model
                 print('affordance model')
                 affordance_action = self.affordance_model.get_action(states, np.random.choice([-1, 1]))
                 affordance_state += affordance_action
-                affordance_state = max(affordance_state, self.max_affordance_state)
+                affordance_state = affordance_state.add_one() if attentional_action == 1 else affordance_state.subtract_one()
 
                 # experiential model
                 print('experiential model')
-                attentional_mask = [int(i) for i in bin(attentional_state)[2:]] # convert decimal to binary bitmask (there might be a faster way to do this)
-                affordance_mask = [int(i) for i in bin(affordance_state)[2:]]
 
-                experiential_state = np.append((emotive_state, arousal_state), environmental_state * attentional_mask).astype(int)
+                experiential_state = np.append((emotive_state, arousal_state), environmental_state * attentional_state).astype(int) # * attentional_mask
                 experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample()) # dont know how to incorporate subgoal, gonna ignore for now
                 # experiental_action *= affordance_mask
 
@@ -87,7 +86,7 @@ class Agent():
                 # update q values
                 self.experiential_model.Q[states, experiental_action] = self.experiential_model.calculate_q(states, experiental_action, environmental_reward, next_states)
                 self.goal_model.Q[states, subgoal_action] = self.goal_model.calculate_q(states, subgoal_action, environmental_reward, next_states)
-                self.attentional_model.Q[environmental_state, attentional_action] = self.attentional_model.calculate_q(states, attentional_action, environmental_reward, next_environmental_state)
+                self.attentional_model.Q[environmental_state, attentional_action] = self.attentional_model.calculate_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
                 self.affordance_model.Q[states, affordance_action] = self.affordance_model.calculate_q(states, affordance_action, environmental_reward, next_states)
                 self.past_qs.appendleft(self.experiential_model.Q[states, experiental_action])
                 
