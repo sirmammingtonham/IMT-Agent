@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class BitMask():
     def __init__(self, girth: int, random=True):
         if random:
@@ -7,6 +8,12 @@ class BitMask():
                          for _ in range(girth)]
         else:
             self.bits = np.zeros(shape=(1, girth), dtype=bool)
+
+    def __str__(self) -> str:
+        return str([int(x) for x in self.bits])
+
+    def __len__(self):
+        return len(self.bits)
 
     # iteratively add one to the bitmask
     def add_one(self):
@@ -25,9 +32,3 @@ class BitMask():
                 rightmost = i
         for i in range(rightmost, len(self.bits)):
             self.bits[i] = bool(self.bits[i] ^ 1)
-
-    def __str__(self) -> str:
-        return str([int(x) for x in self.bits])
-
-    def __len__ (self):
-        return len(self.bits)

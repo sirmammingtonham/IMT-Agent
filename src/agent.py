@@ -1,9 +1,8 @@
 import gym
-import torch
+import collections
 import numpy as np
 from models.q_table import Q_Table
 from util.bitmask import BitMask
-import collections
 
 # todo convert all of this to pytorch so we can use autograd :)
 class Agent():
@@ -34,13 +33,12 @@ class Agent():
             environmental_state = self.env.reset()
             environmental_state = environmental_state.flatten().astype(int)
 
-            emotive_state = 0
-            arousal_state = 0
-            states = np.append((emotive_state, arousal_state), environmental_state).astype(int)
-
             subgoal_state = np.random.choice(np.arange(self.obs_size))
-            attentional_state = BitMask(self.obs_size)
-            affordance_state = BitMask(self.action_size)
+            attentional_state = BitMask(self.obs_size, random=True)
+            affordance_state = BitMask(self.action_size, random=True)
+
+            affective_states = np.zeros(2) # emotive state, arousal state
+            states = np.append( environmental_state, affective_states).astype(int)
 
             done = False
             iterations = 0
@@ -49,39 +47,34 @@ class Agent():
                 # affective system
                 if len(self.past_qs) == self.past_qs.maxlen:
                     assert(environmental_reward is not None)
-                    first_derivative = torch.autograd.grad(list(self.past_qs), environmental_reward)
-                    second_derivative = torch.autograd.grad(first_derivative, environmental_reward)
+                    first_derivative = 0 #torch.autograd.grad(list(self.past_qs), environmental_reward)
+                    second_derivative = 0 #torch.autograd.grad(first_derivative, environmental_reward)
                     emotive_state = first_derivative / self.past_qs.maxlen
                     arousal_state = second_derivative / self.past_qs.maxlen
-                    emotive_state = np.digitize(emotive_state, 100) * 100 # *100 to serve as index for state
-                    arousal_state = np.digitize(arousal_state, 100) * 100
+                    affective_states[0] = round(emotive_state, 2) * 100 # discretize by rounding, then mult by 100 to be index for state
+                    affective_states[1] = round(arousal_state, 2) * 100
 
                 # goal model
                 subgoal_action = self.goal_model.get_action(states, np.random.choice([-1, 1]))
                 subgoal_state += subgoal_action # (should be -1 or +1)
 
-                # attention model
-                print('attention model')
-                attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([-1, 1]))
-                attentional_state = attentional_state.add_one() if attentional_action == 1 else attentional_state.subtract_one()
+                # attentional model
+                attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([0, 1]))
+                attentional_state.add_one() if attentional_action else attentional_state.subtract_one()
 
                 # affordance model
-                print('affordance model')
-                affordance_action = self.affordance_model.get_action(states, np.random.choice([-1, 1]))
-                affordance_state += affordance_action
-                affordance_state = affordance_state.add_one() if attentional_action == 1 else affordance_state.subtract_one()
+                affordance_action = self.affordance_model.get_action(states, np.random.choice([0, 1]))
+                affordance_state.add_one() if attentional_action else affordance_state.subtract_one()
 
                 # experiential model
-                print('experiential model')
-
-                experiential_state = np.append((emotive_state, arousal_state), environmental_state * attentional_state).astype(int) # * attentional_mask
+                experiential_state = np.append(environmental_state * attentional_state.bits, affective_states).astype(int) # * attentional_mask
                 experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample()) # dont know how to incorporate subgoal, gonna ignore for now
                 # experiental_action *= affordance_mask
 
                 next_environmental_state, environmental_reward, done, _ = self.env.step(experiental_action)
                 next_environmental_state = next_environmental_state.flatten().astype(int)
 
-                next_states = np.append(next_environmental_state, (emotive_state, arousal_state)).astype(int)
+                next_states = np.append(next_environmental_state, affective_states).astype(int)
 
                 # update q values
                 self.experiential_model.Q[states, experiental_action] = self.experiential_model.calculate_q(states, experiental_action, environmental_reward, next_states)
@@ -89,13 +82,13 @@ class Agent():
                 self.attentional_model.Q[environmental_state, attentional_action] = self.attentional_model.calculate_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
                 self.affordance_model.Q[states, affordance_action] = self.affordance_model.calculate_q(states, affordance_action, environmental_reward, next_states)
                 self.past_qs.appendleft(self.experiential_model.Q[states, experiental_action])
-                
+
                 environmental_state = next_environmental_state
                 states = next_states
 
                 iterations += 1
                 total_reward += environmental_reward
-                print(f'finished iteration {iterations}, reward={environmental_reward}')
+                print(f'finished iteration {iterations}, reward={total_reward}')
 
             rewards.append(total_reward)
 
