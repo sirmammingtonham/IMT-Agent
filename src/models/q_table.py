@@ -2,8 +2,8 @@ import numpy as np
 
 
 class Q_Table():
-    def __init__(self, obs_space, action_space, alpha, gamma, epsilon):
-        self.Q = np.zeros((obs_space, action_space))
+    def __init__(self, state_space, alpha, gamma, epsilon):
+        self.Q = np.zeros(state_space)
         self.alpha = alpha
         self.gamma = gamma  # discount factor
         self.epsilon = epsilon
@@ -19,7 +19,7 @@ class Q_Table():
         return self.epsilon
 
     def get_action(self, state, random_action):
-        if np.random.rand() <= self.get_epsilon():
+        if np.random.rand() < self.get_epsilon():
             return random_action # env.action_space.sample() when interacting with gym, but sometimes we want to pass our own actions
         else:
             return np.argmax(self.Q[state])
