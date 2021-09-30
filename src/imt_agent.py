@@ -24,13 +24,15 @@ class Agent():
 
 
     # function for running through the episodes
-    def run(self):
+    def run(self, render=False):
         rewards = []
         for episode in range(self.num_episodes):
-            print(f'starting episode {episode}')
+            # print(f'starting episode {episode}')
 
             environmental_state = self.env.reset()
-            self.env.render()
+
+            if render:
+                self.env.render()
 
             subgoal_state = np.random.choice(np.arange(self.obs_size))
             attentional_state = BitMask(self.obs_size, random=True)
@@ -72,7 +74,8 @@ class Agent():
                 # experiental_action *= affordance_mask
 
                 next_environmental_state, environmental_reward, done, _ = self.env.step(experiental_action)
-                self.env.render()
+                if render:
+                    self.env.render()
 
                 next_states = (next_environmental_state,) + affective_states
 
@@ -87,13 +90,15 @@ class Agent():
 
                 iterations += 1
                 total_reward += environmental_reward
-                print(f'finished iteration {iterations}, reward={environmental_reward}')
+                # print(f'finished iteration {iterations}, reward={environmental_reward}')
 
             rewards.append(total_reward)
             print(f'finished episode {episode}, total reward={total_reward}')
 
+        print(self.experiential_model.Q)
+
 if __name__ == '__main__':
     np.random.seed(42069)
     env = gym.make("FrozenLake-v1").env
-    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=100)
+    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=20000)
     agent.run()
