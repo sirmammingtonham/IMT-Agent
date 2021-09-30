@@ -22,10 +22,29 @@ class Q_Table():
         if np.random.rand() < self.get_epsilon():
             return random_action # env.action_space.sample() when interacting with gym, but sometimes we want to pass our own actions
         else:
-            return np.argmax(self.Q[state])
+            try:
+                return np.argmax(self.Q[state])
+            except:
+                print(state)
+                raise
 
     def calculate_q(self, state, action, reward, next_state):
-        return self.Q[state, action] + self.get_alpha() * (
-            reward + self.gamma * np.max(self.Q[next_state, :])
-            - self.Q[state, action]
-        )
+        try:
+            return self.Q[state][action] + self.get_alpha() * (
+                reward + self.gamma * np.max(self.Q[next_state])
+                - self.Q[state][action]
+            )
+        except:
+            print(state)
+            print(action)
+            print(self.Q.shape)
+            print(len(self.Q[state]))
+            print(self.Q[4,0,0,3])
+            print(type(state))
+            print(self.Q[tuple(state)][3])
+
+            print(type(action))
+            print(action == 3)
+            # print(self.Q[state, action])
+            print(self.Q[state][action])
+            assert(False)
