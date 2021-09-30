@@ -3,6 +3,7 @@ import collections
 import numpy as np
 from models.q_table import Q_Table
 from util.bitmask import BitMask
+import torch
 
 # todo convert all of this to pytorch so we can use autograd :)
 class Agent():
@@ -47,10 +48,10 @@ class Agent():
                 # affective system
                 if len(self.past_qs) == self.past_qs.maxlen:
                     assert(environmental_reward is not None)
-                    first_derivative = 0 #torch.autograd.grad(list(self.past_qs), environmental_reward)
-                    second_derivative = 0 #torch.autograd.grad(first_derivative, environmental_reward)
-                    emotive_state = first_derivative / self.past_qs.maxlen
-                    arousal_state = second_derivative / self.past_qs.maxlen
+                    first_derivative = np.diff(list(self.past_qs)) # first derivative: change in q
+                    second_derivative = np.diff(first_derivative) # second derivative: change in first derivative
+                    emotive_state = sum(first_derivative)
+                    arousal_state = sum(second_derivative)
                     affective_states[0] = round(emotive_state, 2) * 100 # discretize by rounding, then mult by 100 to be index for state
                     affective_states[1] = round(arousal_state, 2) * 100
 
