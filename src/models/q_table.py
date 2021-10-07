@@ -31,3 +31,9 @@ class Q_Table():
             reward + self.gamma * np.max(self.Q[next_state])
             - self.Q[state][action]
         )
+
+    def cosine_between_vectors(a , b):
+        anorm = np.linalg.norm(x=a)
+        bnorm = np.linalg.norm(x=b)
+        cos = np.matmul(np.transpose(a/anorm),(b/bnorm))
+        return cos
