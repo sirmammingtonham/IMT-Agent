@@ -1,8 +1,7 @@
 import gym
-import collections
 import numpy as np
 from models.q_table import Q_Table
-from util.bitmask import BitMask
+import matplotlib.pyplot as plt
 
 # todo convert all of this to pytorch so we can use autograd :)
 class Agent():
@@ -10,16 +9,18 @@ class Agent():
         self.env = env
         self.num_episodes = num_episodes
         
-        self.obs_size = env.observation_space.n
+        # self.obs_size = env.observation_space.n
         self.action_size = env.action_space.n
-        self.model = Q_Table((self.obs_size, self.action_size), alpha, gamma, epsilon)
+        self.model = Q_Table(self.action_size, alpha, gamma, epsilon)
 
 
     # function for running through the episodes
-    def run(self):
+    def run(self, render=False):
         rewards = []
         for episode in range(self.num_episodes):
             state = self.env.reset()
+            if render:
+                self.env.render()
 
             done = False
             iterations = 0
@@ -38,11 +39,22 @@ class Agent():
 
             rewards.append(total_reward)
             print(f'finished episode {episode}, total reward={total_reward}')
-        env.render()
-        print(self.model.Q)
+
+        if render:
+            self.env.render()
+
+        win = [x for x in rewards if x == 1]
+        tie = [x for x in rewards if x == 0]
+        loss = [x for x in rewards if x == -1]
+        print(f'WIN%: {len(win)/len(rewards)}')
+        print(f'TIE%: {len(tie)/len(rewards)}')
+        print(f'LOSS%: {len(loss)/len(rewards)}')
+        print(f'AVERAGE REWARD: {np.mean(rewards)}')
+        # plt.plot(rewards)
+        # plt.show()
 
 if __name__ == '__main__':
     np.random.seed(42069)
-    env = gym.make("FrozenLake-v1").env
-    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=20000)
+    env = gym.make("Blackjack-v1")
+    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=10000)
     agent.run()

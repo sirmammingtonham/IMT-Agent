@@ -1,9 +1,10 @@
 import numpy as np
-
+from collections import defaultdict
 
 class Q_Table():
-    def __init__(self, state_space, alpha, gamma, epsilon):
-        self.Q = np.zeros(state_space)
+    def __init__(self, action_size, alpha: float, gamma: float, epsilon: float):
+        # self.Q = np.zeros(state_space)
+        self.Q = defaultdict(lambda: np.zeros(action_size))
         self.alpha = alpha
         self.gamma = gamma  # discount factor
         self.epsilon = epsilon
@@ -27,10 +28,14 @@ class Q_Table():
             return np.argmax(self.Q[state])
 
     def calculate_q(self, state, action, reward, next_state):
-        return self.Q[state][action] + self.get_alpha() * (
-            reward + self.gamma * np.max(self.Q[next_state])
-            - self.Q[state][action]
-        )
+        try:
+            return self.Q[state][action] + self.get_alpha() * (
+                reward + self.gamma * np.max(self.Q[next_state])
+                - self.Q[state][action]
+            )
+        except:
+            print('broaeuhoraeu')
+            print(state, action, reward, next_state)
 
     def cosine_between_vectors(a , b):
         anorm = np.linalg.norm(x=a)

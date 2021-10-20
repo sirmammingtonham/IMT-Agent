@@ -3,25 +3,39 @@ import collections
 import numpy as np
 from models.q_table import Q_Table
 from util.bitmask import BitMask
+import matplotlib.pyplot as plt
 
-# todo convert all of this to pytorch so we can use autograd :)
+
 class Agent():
-    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float, window_size: int=20, num_episodes: int=3):
+    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float, target_value=0.1, window_size: int = 20, num_episodes: int = 3):
         self.env = env
         self.num_episodes = num_episodes
-        
-        self.obs_size = env.observation_space.n
+
+        self.obs_size = env.observation_space
         self.action_size = env.action_space.n
         # self.max_attentional_state = int('1' * self.obs_size, base=2)
         # self.max_affordance_state = int('1' * self.action_size, base=2)
 
         self.past_qs = collections.deque(maxlen=window_size)
 
-        self.goal_model = Q_Table((self.obs_size, 100, 100, 2), alpha, gamma, epsilon)
-        self.attentional_model = Q_Table((self.obs_size, 2), alpha, gamma, epsilon)
-        self.affordance_model = Q_Table((self.obs_size, 100, 100, 2), alpha, gamma, epsilon)
-        self.experiential_model = Q_Table((self.obs_size, 100, 100, self.action_size), alpha, gamma, epsilon)
+        self.arousal_model = Q_Table(100, alpha, gamma, epsilon)
+        self.emotive_model = Q_Table(100, alpha, gamma, epsilon)
+        self.goal_model = Q_Table(2, alpha, gamma, epsilon)
+        self.attentional_model = Q_Table(2, alpha, gamma, epsilon)
+        self.affordance_model = Q_Table(2, alpha, gamma, epsilon)
+        self.experiential_model = Q_Table(
+            self.action_size, alpha, gamma, epsilon)
 
+        self.target_value = target_value
+        self.affective_values = np.arange(0, 1, 0.1)
+
+    def create_circular_mask(h, w, center, radius):
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+        mask = dist_from_center <= radius
+        return mask
+# stochastic switch bits
 
     # function for running through the episodes
     def run(self, render=False):
@@ -34,12 +48,11 @@ class Agent():
             if render:
                 self.env.render()
 
-            subgoal_state = np.random.choice(np.arange(self.obs_size))
-            attentional_state = BitMask(self.obs_size, random=True)
-            affordance_state = BitMask(self.action_size, random=True)
-
-            affective_states = (0,0) # emotive state, arousal state
-            states = (environmental_state,) + affective_states
+            subgoal = 0  # np.random.choice(np.arange(self.obs_size))
+            # attentional_mask = BitMask(self.obs_size, random=True)
+            # affordance_mask = BitMask(self.action_size, random=True)
+            arousal_state, emotive_state = None, None
+            arousal_action, emotive_action = (0, 0)
 
             done = False
             iterations = 0
@@ -47,46 +60,68 @@ class Agent():
             while not done:
                 # affective system
                 if len(self.past_qs) == self.past_qs.maxlen:
-                    assert(environmental_reward is not None)
-                    first_derivative = np.diff(list(self.past_qs)) # first derivative: change in q
-                    second_derivative = np.diff(first_derivative) # second derivative: change in first derivative
-                    emotive_state = sum(first_derivative)
-                    arousal_state = sum(second_derivative)
-                    emotive_state = int(round(emotive_state, 2) * 100)  # discretize by rounding, then mult by 100 to be index for state
-                    arousal_state = int(round(arousal_state, 2) * 100)
-                    affective_states = (emotive_state, arousal_state)
+                    first_derivative = np.gradient(self.past_qs)
+                    second_derivative = np.gradient(first_derivative)
+                    first_derivative = np.average(first_derivative)
+                    second_derivative = np.average(second_derivative)
+
+                    if arousal_state is not None:
+                        next_arousal_state = (environmental_state, second_derivative)
+                        next_emotive_state = (environmental_state, arousal_action, first_derivative)
+                        self.arousal_model.Q[arousal_state][arousal_action] = self.arousal_model.calculate_q(arousal_state, arousal_action, arousal_reward, next_arousal_state)
+                        self.emotive_model.Q[emotive_state][emotive_action] = self.emotive_model.calculate_q(emotive_state, emotive_action, emotive_reward, next_emotive_state)
+
+                    arousal_state = (environmental_state, second_derivative)
+                    emotive_state = (environmental_state, arousal_action, first_derivative)
+
+                    arousal_action = self.arousal_model.get_action(arousal_state, np.random.choice(self.affective_values))
+                    arousal_reward = 1 - np.abs(arousal_action - self.target_value) # arousal reward is distance between action and target
+                    
+                    emotive_action = self.arousal_model.get_action(emotive_state, np.random.choice(self.affective_values))
+                    emotive_reward = 1 - np.abs(emotive_action - arousal_action)
+
+                    arousal_action = int(arousal_action*100)
+                    emotive_action = int(emotive_action*100)
 
                 # goal model
-                subgoal_action = self.goal_model.get_action(states, np.random.choice([-1, 1]))
-                subgoal_state += subgoal_action # (should be -1 or +1)
+                subgoal_state = (environmental_state, emotive_action, arousal_action)
+                subgoal_action = self.goal_model.get_action(subgoal_state, np.random.choice([-1, 1]))
+                subgoal += subgoal_action  # (should be -1 or +1)
 
                 # attentional model
                 attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([0, 1]))
-                attentional_state.add_one() if attentional_action else attentional_state.subtract_one()
+                # attentional_mask.add_one() if attentional_action else attentional_mask.subtract_one()
 
                 # affordance model
-                affordance_action = self.affordance_model.get_action(states, np.random.choice([0, 1]))
-                affordance_state.add_one() if attentional_action else affordance_state.subtract_one()
+                affordance_state = (environmental_state, emotive_action, arousal_action, subgoal, ) # attentional_mask?)
+                affordance_action = self.affordance_model.get_action(affordance_state, np.random.choice([0, 1]))
+                # affordance_mask.add_one() if attentional_action else affordance_mask.subtract_one()
 
                 # experiential model
-                experiential_state = (environmental_state if attentional_state.bits[environmental_state] else 0,) + affective_states
-                experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample()) # dont know how to incorporate subgoal, gonna ignore for now
+                experiential_state = (environmental_state, emotive_action, arousal_action, subgoal)
+                # dont know how to incorporate subgoal, gonna ignore for now
+                experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample())
                 # experiental_action *= affordance_mask
 
                 next_environmental_state, environmental_reward, done, _ = self.env.step(experiental_action)
                 if render:
                     self.env.render()
 
-                next_states = (next_environmental_state,) + affective_states
+                next_experiental_state = (next_environmental_state, emotive_action, arousal_action, subgoal)
+                next_subgoal_state = (next_environmental_state, emotive_action, arousal_action)
+                next_affordance_state = (next_environmental_state, emotive_action, arousal_action, subgoal, )
 
                 # update q values
-                self.experiential_model.Q[states][experiental_action] = self.experiential_model.calculate_q(states, experiental_action, environmental_reward, next_states)
-                self.goal_model.Q[states][subgoal_action] = self.goal_model.calculate_q(states, subgoal_action, environmental_reward, next_states)
+                self.experiential_model.Q[experiential_state][experiental_action] = self.experiential_model.calculate_q(experiential_state, experiental_action, environmental_reward, next_experiental_state)
+                self.goal_model.Q[subgoal_state][subgoal_action] = self.goal_model.calculate_q(subgoal_state, subgoal_action, environmental_reward, next_subgoal_state)
                 self.attentional_model.Q[environmental_state][attentional_action] = self.attentional_model.calculate_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
-                self.affordance_model.Q[states][affordance_action] = self.affordance_model.calculate_q(states, affordance_action, environmental_reward, next_states)
-                self.past_qs.appendleft(self.experiential_model.Q[states][experiental_action])
+                self.affordance_model.Q[affordance_state][affordance_action] = self.affordance_model.calculate_q(affordance_state, affordance_action, environmental_reward, next_affordance_state)
+
+                self.past_qs.appendleft(
+                    self.experiential_model.Q[experiential_state][experiental_action])
+
                 environmental_state = next_environmental_state
-                states = next_states
+                # states = next_states
 
                 iterations += 1
                 total_reward += environmental_reward
@@ -94,11 +129,23 @@ class Agent():
 
             rewards.append(total_reward)
             print(f'finished episode {episode}, total reward={total_reward}')
+        # print(self.experiential_model.Q)
+        win = [x for x in rewards if x == 1]
+        tie = [x for x in rewards if x == 0]
+        loss = [x for x in rewards if x == -1]
+        print(f'WIN%: {len(win)/len(rewards)}')
+        print(f'TIE%: {len(tie)/len(rewards)}')
+        print(f'LOSS%: {len(loss)/len(rewards)}')
+        print(f'AVERAGE REWARD: {np.mean(rewards)}')
+        # plt.plot(rewards)
+        # plt.show()
 
-        print(self.experiential_model.Q)
 
 if __name__ == '__main__':
     np.random.seed(42069)
-    env = gym.make("FrozenLake-v1").env
-    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=20000)
+    env = gym.make("Blackjack-v1")
+    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=100000)
     agent.run()
+
+
+# bucket space in 1000s
