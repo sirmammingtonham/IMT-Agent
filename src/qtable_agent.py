@@ -1,13 +1,12 @@
 import gym
 import numpy as np
-from models.q_table import Q_Table
+from .models.q_table import Q_Table
 import matplotlib.pyplot as plt
 
 # todo convert all of this to pytorch so we can use autograd :)
-class Agent():
-    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float, window_size: int=20, num_episodes: int=3):
+class QAgent():
+    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float):
         self.env = env
-        self.num_episodes = num_episodes
         
         # self.obs_size = env.observation_space.n
         self.action_size = env.action_space.n
@@ -15,9 +14,9 @@ class Agent():
 
 
     # function for running through the episodes
-    def run(self, render=False):
+    def run(self, num_episodes=1000, render=False):
         rewards = []
-        for episode in range(self.num_episodes):
+        for episode in range(num_episodes):
             state = self.env.reset()
             if render:
                 self.env.render()
@@ -56,5 +55,5 @@ class Agent():
 if __name__ == '__main__':
     np.random.seed(42069)
     env = gym.make("Blackjack-v1")
-    agent = Agent(env, alpha=0.1, gamma=0.9, epsilon=0.1, num_episodes=10000)
-    agent.run()
+    agent = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
+    agent.run(num_episodes=10000)
