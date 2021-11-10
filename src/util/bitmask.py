@@ -8,7 +8,7 @@ class BitMask():
                          for _ in range(girth)]
         else:
             self.bits = np.zeros(shape=(1, girth), dtype=bool)
-        self.bitpointer = 0
+        self.bit_pointer = 0
 
     def __str__(self) -> str:
         return str([int(x) for x in self.bits])
@@ -25,15 +25,6 @@ class BitMask():
             else:
                 self.bits[i] = False
 
-    def increase_pointer(self):
-        self.bitpointer ++ 1
-
-    def decrease_pointer(self):
-        self.bitpointer -= 1
-
-    def flippointer(self):
-        self.bits[self.bitpointer] = ~ self.bits[self.bitpointer]
-
     # iteratively subtract one to the bitmask
     def subtract_one(self):
         rightmost = -1
@@ -42,6 +33,15 @@ class BitMask():
                 rightmost = i
         for i in range(rightmost, len(self.bits)):
             self.bits[i] = bool(self.bits[i] ^ 1)
+
+    def increase_pointer(self):
+        self.bit_pointer ++ 1
+
+    def decrease_pointer(self):
+        self.bit_pointer -= 1
+
+    def flip_pointer(self):
+        self.bits[self.bit_pointer] = ~ self.bits[self.bit_pointer]
     
-    def getpointer(self):
-        return self.bitpointer
+    def get_pointer(self):
+        return self.bit_pointer
