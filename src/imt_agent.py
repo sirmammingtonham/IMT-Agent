@@ -25,7 +25,7 @@ class IMTAgent():
         self.experiential_model = Q_Table(
             self.action_size, alpha, gamma, epsilon)
 
-        self.visited_states = []
+        self.visited_states = {}
 
         self.target_value = target_value
         self.affective_values = np.arange(0, 1, 0.1)
@@ -57,8 +57,8 @@ class IMTAgent():
                 self.env.render()
 
             subgoal_idx = 0  # np.random.choice(np.arange(self.obs_size))
-            # attentional_mask = BitMask(self.obs_size, random=True)
-            # affordance_mask = BitMask(self.action_size, random=True)
+            attentional_mask = BitMask(self.obs_size, random=True)
+            affordance_mask = BitMask(self.action_size, random=True)
             arousal_state, emotive_state = None, None
             arousal_action, emotive_action = (0, 0)
 
@@ -107,18 +107,21 @@ class IMTAgent():
 
                 # attentional model
                 attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([0, 1]))
-                # attentional_mask.add_one() if attentional_action else attentional_mask.subtract_one()
+                attentional_mask.add_one() if attentional_action else attentional_mask.subtract_one()
 # flip bits
+
+#instead of addone, 
                 # affordance model
                 affordance_state = (environmental_state, emotive_action, arousal_action, subgoal_idx, ) # attentional_mask?)
                 affordance_action = self.affordance_model.get_action(affordance_state, np.random.choice([0, 1]))
-                # affordance_mask.add_one() if attentional_action else affordance_mask.subtract_one()
+                affordance_mask.add_one() if attentional_action else affordance_mask.subtract_one()
 
                 # experiential model
                 experiential_state = (environmental_state, emotive_action, arousal_action, subgoal_idx)
-                # dont know how to incorporate subgoal, gonna ignore for now
                 experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample())
-                # experiental_action *= affordance_mask
+                if not affordance_mask.bits[experiental_action]:
+                    experiental_action = 0
+                    # turn action into pass
 
                 next_environmental_state, environmental_reward, done, _ = self.env.step(experiental_action)
                 if render:
