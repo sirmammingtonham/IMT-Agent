@@ -53,34 +53,42 @@ class QAgent():
         # plt.show()
 
 if __name__ == '__main__':
-    np.random.seed(42069)
-    env = gym.make('gym_go:go-v0', size=7, komi=0)
+    # Go test with qAgents running against each other
+    env = gym.make('gym_go:go-v0', size=5, komi=0)
     agent1 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
     agent2 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
 
     rewards = []
-    for episode in range(100):
+    for episode in range(10):
         state = env.reset()
-        env.render()
 
         done = False
         iterations = 0
         total_reward = 0
         while not done:
-            action = agent1.model.get_action(state, env.action_space.sample())
-            next_state, reward, done, _ = env.step(action)
+            action = agent1.model.get_action(state.tobytes(), env.uniform_random_action())
+            print(f'agent1: {action}')
+            try:
+                next_state, reward, done, _ = env.step(action)
+            except:
+                pass
 
-            agent1.model.Q[state][action] = agent1.model.calculate_q(state, action, reward, next_state)
+            # print(state.shape)
+            agent1.model.Q[state.tobytes()][action] = agent1.model.calculate_q(state.tobytes(), action, reward, next_state.tobytes())
             state = next_state
 
             if done:
                 state = env.reset()
                 break
 
-            action = agent2.model.get_action(state, env.action_space.sample())
-            next_state, reward, done, _ = env.step(action)
-
-            agent2.model.Q[state][action] = agent2.model.calculate_q(state, action, reward, next_state)
+            action = agent2.model.get_action(state.tobytes(), env.uniform_random_action())
+            print(f'agent2: {action}')
+            try:
+                next_state, reward, done, _ = env.step(action)
+            except:
+                pass
+            
+            agent2.model.Q[state.tobytes()][action] = agent2.model.calculate_q(state.tobytes(), action, reward, next_state.tobytes())
             state = next_state
 
             iterations += 1
@@ -89,11 +97,12 @@ if __name__ == '__main__':
             if done:
                 state = env.reset()
                 break
-        
+
+            # uncomment to see visual steps
+            # env.render('terminal')
         rewards.append(total_reward)
         print(f'finished episode {episode}, total reward={total_reward}')
         
-    env.render()
 
     win = [x for x in rewards if x == 1]
     tie = [x for x in rewards if x == 0]
