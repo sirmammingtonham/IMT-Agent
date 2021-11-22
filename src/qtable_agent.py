@@ -2,6 +2,7 @@ import gym
 import numpy as np
 from models.q_table import Q_Table
 import matplotlib.pyplot as plt
+from observation_wrapper import ObservationWrapper
 
 # todo convert all of this to pytorch so we can use autograd :)
 class QAgent():
@@ -54,12 +55,13 @@ class QAgent():
 
 if __name__ == '__main__':
     # Go test with qAgents running against each other
-    env = gym.make('gym_go:go-v0', size=5, komi=0)
+    env = ObservationWrapper(gym.make('gym_go:go-v0', size=5,
+                   komi=0, reward_method='real'))
     agent1 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
     agent2 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
 
     rewards = []
-    for episode in range(10):
+    for episode in range(1):
         state = env.reset()
 
         done = False
@@ -67,7 +69,7 @@ if __name__ == '__main__':
         total_reward = 0
         while not done:
             action = agent1.model.get_action(state.tobytes(), env.uniform_random_action())
-            print(f'agent1: {action}')
+            # print(f'agent1: {action}')
             try:
                 next_state, reward, done, _ = env.step(action)
             except:
@@ -82,7 +84,7 @@ if __name__ == '__main__':
                 break
 
             action = agent2.model.get_action(state.tobytes(), env.uniform_random_action())
-            print(f'agent2: {action}')
+            # print(f'agent2: {action}')
             try:
                 next_state, reward, done, _ = env.step(action)
             except:
@@ -97,7 +99,7 @@ if __name__ == '__main__':
             if done:
                 state = env.reset()
                 break
-
+            
             # uncomment to see visual steps
             # env.render('terminal')
         rewards.append(total_reward)

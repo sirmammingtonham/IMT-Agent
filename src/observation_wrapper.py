@@ -1,7 +1,6 @@
 import gym
 import numpy as np
 
-
 class ObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env=None):
         super(ObservationWrapper, self).__init__(env)
@@ -29,19 +28,3 @@ class ObservationWrapper(gym.ObservationWrapper):
                 new_obs[ind] = 2
 
         return new_obs
-
-go_env = ObservationWrapper(gym.make('gym_go:go-v0', size=5,
-                   komi=0, reward_method='real'))
-    
-
-action = go_env.uniform_random_action()
-print(action)
-state, reward, done, info = go_env.step(action)
-print(state)
-go_env.render('terminal')
-
-action = go_env.uniform_random_action()
-print(action)
-state, reward, done, info = go_env.step(action)
-print(state)
-go_env.render('terminal')
