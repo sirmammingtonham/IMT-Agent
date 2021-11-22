@@ -6,13 +6,23 @@ from observation_wrapper import ObservationWrapper
 
 # todo convert all of this to pytorch so we can use autograd :)
 class QAgent():
-    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float):
-        self.env = env
-        
-        # self.obs_size = env.observation_space.n
-        self.action_size = env.action_space.n
+    def __init__(self, obs_size: int, action_size: int, alpha: float, gamma: float, epsilon: float):
+        self.obs_size = obs_size
+        self.action_size = action_size
+
         self.model = Q_Table(self.action_size, alpha, gamma, epsilon)
 
+    def step(self, env: gym.Env, state: np.array):
+        action = self.model.get_action(state, env.action_space.sample())
+
+        try:
+            next_state, reward, done, info = env.step(action)
+        except AssertionError: # invalid move
+            next_state, reward, done, info = env.step(self.action_size - 1)
+
+        self.model.update_q(state, action, reward, next_state)
+
+        return next_state, reward, done, info
 
     # function for running through the episodes
     def run(self, num_episodes=1000, render=False):
@@ -54,8 +64,9 @@ class QAgent():
         # plt.show()
 
 if __name__ == '__main__':
+    from go import GoWrapper
     # Go test with qAgents running against each other
-    env = ObservationWrapper(gym.make('gym_go:go-v0', size=5,
+    env = GoWrapper(gym.make('gym_go:go-v0', size=5,
                    komi=0, reward_method='real'))
     agent1 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
     agent2 = QAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)

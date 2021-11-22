@@ -25,17 +25,16 @@ class Q_Table():
         if np.random.rand() < self.get_epsilon():
             return random_action
         else:
-            return np.argmax(self.Q[state])
+            return np.argmax(self.Q[state.tobytes()])
 
     def calculate_q(self, state, action, reward, next_state):
-        try:
-            return self.Q[state][action] + self.get_alpha() * (
-                reward + self.gamma * np.max(self.Q[next_state])
-                - self.Q[state][action]
-            )
-        except:
-            print('broaeuhoraeu')
-            print(state, action, reward, next_state)
+        return self.Q[state.tobytes()][action] + self.get_alpha() * (
+            reward + self.gamma * np.max(self.Q[next_state.tobytes()])
+            - self.Q[state.tobytes()][action]
+        )
+        
+    def update_q(self, state, action, reward, next_state):
+        self.Q[state.tobytes()][action] = self.calculate_q(state, action, reward, next_state)
 
     def cosine_between_vectors(a , b):
         anorm = np.linalg.norm(x=a)

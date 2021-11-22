@@ -6,26 +6,32 @@ from util.bitmask import BitMask
 import matplotlib.pyplot as plt
 
 class IMTAgent():
-    def __init__(self, env: gym.Env, alpha: float, gamma: float, epsilon: float, target_value=0.1, window_size: int = 20):
-        self.env = env
+    def __init__(self, obs_size: int, action_size: int, alpha: float, gamma: float, epsilon: float, target_value=0.1, window_size: int = 20):
 
-        self.obs_size = len(env.observation_space)
-        self.action_size = env.action_space.n
+        self.obs_size = obs_size
+        self.action_size = action_size
 
         self.past_qs = collections.deque(maxlen=window_size)
 
         self.arousal_model = Q_Table(100, alpha, gamma, epsilon)
         self.emotive_model = Q_Table(100, alpha, gamma, epsilon)
-        self.goal_model = Q_Table(2, alpha, gamma, epsilon)
-        self.attentional_model = Q_Table(2, alpha, gamma, epsilon)
-        self.affordance_model = Q_Table(2, alpha, gamma, epsilon)
+
+        self.goal_model = Q_Table(3, alpha, gamma, epsilon)
+        self.subgoal_idx = 0
+
+        self.attentional_model = Q_Table(3, alpha, gamma, epsilon)
+        self.attentional_mask = BitMask(obs_size, random=True)
+
+        self.affordance_model = Q_Table(3, alpha, gamma, epsilon)
+        self.affordance_mask = BitMask(action_size, random=True)
+
         self.experiential_model = Q_Table(
             self.action_size, alpha, gamma, epsilon)
 
-        self.visited_states = set()
+        self.visited_states = []
 
         self.target_value = target_value
-        self.affective_values = np.arange(0, 1, 0.1)
+        self.affective_values = np.arange(0, 100, 1)
 
     @staticmethod
     def create_circular_mask(h, w, center, radius):
@@ -35,13 +41,19 @@ class IMTAgent():
         mask = dist_from_center <= radius
         return mask
 
-    @staticmethod
-    def get_distance(first_state, second_state):
+    def get_distance(self, first_state, second_state):
         first_state = np.array(first_state)
         second_state = np.array(second_state)
         return np.linalg.norm(first_state - second_state)
+
+    def clamp(self, n, minn, maxn):
+        return max(min(maxn, n), minn)
+
+    def concatenate_state(self, *args):
+        return np.append(args[0], args[1:])
+
 # stochastic switch bits
-    def agent_step(self, environmental_state, arousal_state, arousal_action, arousal_reward, emotive_state, emotive_action, emotive_reward, subgoal_idx, render = False):
+    def step(self, env: gym.Env, environmental_state: np.array):
         self.visited_states.append(environmental_state)
 
         # affective system
@@ -51,127 +63,126 @@ class IMTAgent():
             first_derivative = np.average(first_derivative)
             second_derivative = np.average(second_derivative)
 
-            if arousal_state is not None:
-                next_arousal_state = (environmental_state, second_derivative)
-                next_emotive_state = (environmental_state, arousal_action, first_derivative)
-                self.arousal_model.Q[arousal_state][arousal_action] = self.arousal_model.calculate_q(arousal_state, arousal_action, arousal_reward, next_arousal_state)
-                self.emotive_model.Q[emotive_state][emotive_action] = self.emotive_model.calculate_q(emotive_state, emotive_action, emotive_reward, next_emotive_state)
-
-            arousal_state = (environmental_state, second_derivative)
-            emotive_state = (environmental_state, arousal_action, first_derivative)
-
+            arousal_state = self.concatenate_state(environmental_state, second_derivative,)
             arousal_action = self.arousal_model.get_action(arousal_state, np.random.choice(self.affective_values))
-            arousal_reward = 1 - np.abs(arousal_action - self.target_value) # arousal reward is distance between action and target
-            
-            emotive_action = self.arousal_model.get_action(emotive_state, np.random.choice(self.affective_values))
-            emotive_reward = 1 - np.abs(emotive_action - arousal_action)
 
-            arousal_action = int(arousal_action*100)
-            emotive_action = int(emotive_action*100)
+            emotive_state = self.concatenate_state(environmental_state, arousal_action, first_derivative,)
+            emotive_action = self.emotive_model.get_action(emotive_state, np.random.choice(self.affective_values))
+        else:
+            arousal_state, emotive_state = None, None
+            arousal_action, emotive_action = 0, 0
 
-            # goal model
-            subgoal_state = (environmental_state, emotive_action, arousal_action)
-            subgoal_action = self.goal_model.get_action(subgoal_state, np.random.choice([-1, 0, 1]))
-            subgoal_idx += subgoal_action  # (should be -1 or +1)
-            if subgoal_idx < 0:
-                subgoal_idx = 0
-            elif subgoal_idx == len(self.visited_states):
-                subgoal_idx -= 1
-# influence map
-# distance
-# internal r (new state close to the subgoal)
+        # goal model
+        subgoal_state = self.concatenate_state(environmental_state, emotive_action, arousal_action,)
+        subgoal_action = self.goal_model.get_action(subgoal_state, np.random.choice([-1, 0, 1]))
+        self.subgoal_idx += subgoal_action
+        self.subgoal_idx = self.clamp(self.subgoal_idx, 0, len(self.visited_states))
 
-            # attentional model
-            attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([0, 1]))
-            # attentional_mask.add_one() if attentional_action else attentional_mask.subtract_one()
-# flip bits
-            # affordance model
-            affordance_state = (environmental_state, emotive_action, arousal_action, subgoal_idx, ) # attentional_mask?)
-            affordance_action = self.affordance_model.get_action(affordance_state, np.random.choice([0, 1]))
-            # affordance_mask.add_one() if attentional_action else affordance_mask.subtract_one()
+        # attentional model
+        attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([-1, 0, 1]))
+        if attentional_action == 1:
+            self.attentional_mask.add_one()
+        elif attentional_action == -1:
+            self.attentional_mask.subtract_one()
 
-            # experiential model
-            experiential_state = (environmental_state, emotive_action, arousal_action, subgoal_idx)
-            # dont know how to incorporate subgoal, gonna ignore for now
-            experiental_action = self.experiential_model.get_action(experiential_state, self.env.action_space.sample())
-            # experiental_action *= affordance_mask
+        # affordance model
+        affordance_state = self.concatenate_state(environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
+        affordance_action = self.affordance_model.get_action(affordance_state, np.random.choice([-1, 0, 1]))
+        if affordance_action == 1:
+            self.affordance_mask.add_one()
+        elif affordance_action == -1:
+            self.affordance_mask.subtract_one()
 
-            next_environmental_state, environmental_reward, done, _ = self.env.step(experiental_action)
-            if render:
-                self.env.render()
+        # experiential model
+        # mask state attentional here
+        experiential_state = self.concatenate_state(environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
+        experiental_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
+        # mask action here
 
-            next_experiental_state = (next_environmental_state, emotive_action, arousal_action, subgoal_idx,)
-            next_subgoal_state = (next_environmental_state, emotive_action, arousal_action,)
-            next_affordance_state = (next_environmental_state, emotive_action, arousal_action, subgoal_idx,)
+        try:
+            next_environmental_state, environmental_reward, done, info = env.step(experiental_action)
+        except AssertionError: # invalid move
+            # do you change experiential action or keep it and have the rewards be from passing?
+            next_environmental_state, environmental_reward, done, info = env.step(self.action_size - 1)
 
-            # update q values
-            self.experiential_model.Q[experiential_state][experiental_action] = self.experiential_model.calculate_q(experiential_state, experiental_action, environmental_reward, next_experiental_state)
+        # todo find out how the next state is updated
+        next_subgoal_state = self.concatenate_state(next_environmental_state, emotive_action, arousal_action,)
+        next_affordance_state = self.concatenate_state(next_environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
+        next_experiental_state = self.concatenate_state(next_environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
 
-            subgoal_reward = IMTAgent.get_distance(environmental_state, self.visited_states[subgoal_idx]) - environmental_reward
-            self.goal_model.Q[subgoal_state][subgoal_action] = self.goal_model.calculate_q(subgoal_state, subgoal_action, subgoal_reward, next_subgoal_state)
+        if arousal_state is not None:
+            next_arousal_state = self.concatenate_state(next_environmental_state, second_derivative,)
+            next_emotive_state = self.concatenate_state(next_environmental_state, arousal_action, first_derivative,)
+            arousal_reward = (1  - (self.target_value -  second_derivative)) * environmental_reward
+            emotive_reward =(1  - (self.target_value -  first_derivative)) * environmental_reward
+            #  update q values
+            self.arousal_model.update_q(arousal_state, arousal_action, arousal_reward, next_arousal_state)
+            self.emotive_model.update_q(emotive_state, emotive_action, emotive_reward, next_emotive_state)
 
-            self.attentional_model.Q[environmental_state][attentional_action] = self.attentional_model.calculate_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
-            self.affordance_model.Q[affordance_state][affordance_action] = self.affordance_model.calculate_q(affordance_state, affordance_action, environmental_reward, next_affordance_state)
+        subgoal_reward = self.get_distance(environmental_state, self.visited_states[self.subgoal_idx]) - environmental_reward
+        self.goal_model.update_q(subgoal_state, subgoal_action, subgoal_reward, next_subgoal_state)
 
-            self.past_qs.appendleft(
-                self.experiential_model.Q[experiential_state][experiental_action])
+        self.attentional_model.update_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
+        self.affordance_model.update_q(affordance_state, affordance_action, environmental_reward, next_affordance_state)
 
-            environmental_state = next_environmental_state
-            # states = next_states
-            return (environmental_reward, environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx)
+        self.experiential_model.update_q(experiential_state, experiental_action, environmental_reward, next_experiental_state)
+        self.past_qs.appendleft(self.experiential_model.Q[experiential_state.tobytes()][experiental_action])
+
+
+        return next_environmental_state, environmental_reward, done, info
 
 
     # function for running through the episodes
-    def run(self, num_episodes=1000, render=False):
-        rewards = []
-        for episode in range(num_episodes):
-            # print(f'starting episode {episode}')
+#     def run(self, env, num_episodes=1000, render=False):
+#         rewards = []
+#         for episode in range(num_episodes):
+#             # print(f'starting episode {episode}')
 
-            environmental_state = self.env.reset()
+#             environmental_state = env.reset()
 
-            if render:
-                self.env.render()
+#             if render:
+#                 env.render()
 
-            subgoal_idx = 0  # np.random.choice(np.arange(self.obs_size))
-            attentional_mask = BitMask(self.obs_size, random=True)
-            affordance_mask = BitMask(self.action_size, random=True)
-            arousal_state, emotive_state = None, None
-            arousal_action, emotive_action = (0, 0)
-            environmental_reward = None
+#             subgoal_idx = 0  # np.random.choice(np.arange(self.obs_size))
+#             attentional_mask = BitMask(self.obs_size, random=True)
+#             affordance_mask = BitMask(self.action_size, random=True)
+#             arousal_state, emotive_state = None, None
+#             arousal_action, emotive_action = (0, 0)
+#             environmental_reward = None
 
-            done = False
-            iterations = 0
-            total_reward = 0
-            while not done:
-                environmental_reward, environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx = self.agent_step(environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx, render)
-                total_reward += environmental_reward
-                iterations += 1
+#             done = False
+#             iterations = 0
+#             total_reward = 0
+#             while not done:
+#                 environmental_reward, environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx = self.agent_step(environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx, render)
+#                 total_reward += environmental_reward
+#                 iterations += 1
                 
 
-            rewards.append(total_reward)
-            print(f'finished episode {episode}, total reward={total_reward}')
+#             rewards.append(total_reward)
+#             print(f'finished episode {episode}, total reward={total_reward}')
 
-        win = [x for x in rewards if x == 1]
-        tie = [x for x in rewards if x == 0]
-        loss = [x for x in rewards if x == -1]
-        print(f'WIN%: {len(win)/len(rewards)}')
-        print(f'TIE%: {len(tie)/len(rewards)}')
-        print(f'LOSS%: {len(loss)/len(rewards)}')
-        print(f'AVERAGE REWARD: {np.mean(rewards)}')
-        # plt.plot(rewards)
-        # plt.show()
-        return rewards
-
-
-if __name__ == '__main__':
-    np.random.seed(42069)
-    # env = gym.make("Blackjack-v1")
-    env = gym.make('gym_go:go-v0', size=7, komi=0)
-    agent = IMTAgent(env, alpha=0.1, gamma=0.9, epsilon=0.1)
-    agent.run(num_episodes=100000)
+#         win = [x for x in rewards if x == 1]
+#         tie = [x for x in rewards if x == 0]
+#         loss = [x for x in rewards if x == -1]
+#         print(f'WIN%: {len(win)/len(rewards)}')
+#         print(f'TIE%: {len(tie)/len(rewards)}')
+#         print(f'LOSS%: {len(loss)/len(rewards)}')
+#         print(f'AVERAGE REWARD: {np.mean(rewards)}')
+#         # plt.plot(rewards)
+#         # plt.show()
+#         return rewards
 
 
-# bucket space in 1000s
-# influence map
-# distance
-# internal r (new state close to the subgoal)
+# if __name__ == '__main__':
+#     np.random.seed(42069)
+#     # env = gym.make("Blackjack-v1")
+#     env = gym.make('gym_go:go-v0', size=7, komi=0)
+#     agent = IMTAgent(25,26, alpha=0.1, gamma=0.9, epsilon=0.1)
+#     agent.run(env, num_episodes=100000)
+
+
+# # bucket space in 1000s
+# # influence map
+# # distance
+# # internal r (new state close to the subgoal)
