@@ -52,6 +52,9 @@ class IMTAgent():
     def concatenate_state(self, *args):
         return np.append(args[0], args[1:])
 
+    def trim_environmental_state(self, env_state, atten_mask):
+        return np.asarray([val for ind, val in enumerate(env_state) if not atten_mask.bits[ind]])
+
 # stochastic switch bits
     def step(self, env: gym.Env, environmental_state: np.array):
         self.visited_states.append(environmental_state)
@@ -95,6 +98,8 @@ class IMTAgent():
 
         # experiential model
         # mask state attentional here
+        environmental_state = self.trim_environmental_state(environmental_state, self.attentional_mask)
+
         experiential_state = self.concatenate_state(environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
         experiental_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
         # mask action here
