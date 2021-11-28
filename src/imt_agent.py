@@ -101,11 +101,18 @@ class IMTAgent():
         environmental_state = self.trim_environmental_state(environmental_state, self.attentional_mask)
 
         experiential_state = self.concatenate_state(environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
-        experiental_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
+        experiential_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
+
+        retries = 1
+        for i in range(retries + 1):
+            if self.affordance_mask[experiential_action]:
+                experiential_action = self.action_size - 1
+            else:
+                break
         # mask action here
 
         try:
-            next_environmental_state, environmental_reward, done, info = env.step(experiental_action)
+            next_environmental_state, environmental_reward, done, info = env.step(experiential_action)
         except AssertionError: # invalid move
             # do you change experiential action or keep it and have the rewards be from passing?
             next_environmental_state, environmental_reward, done, info = env.step(self.action_size - 1)
@@ -130,8 +137,8 @@ class IMTAgent():
         self.attentional_model.update_q(environmental_state, attentional_action, environmental_reward, next_environmental_state)
         self.affordance_model.update_q(affordance_state, affordance_action, environmental_reward, next_affordance_state)
 
-        self.experiential_model.update_q(experiential_state, experiental_action, environmental_reward, next_experiental_state)
-        self.past_qs.appendleft(self.experiential_model.Q[experiential_state.tobytes()][experiental_action])
+        self.experiential_model.update_q(experiential_state, experiential_action, environmental_reward, next_experiental_state)
+        self.past_qs.appendleft(self.experiential_model.Q[experiential_state.tobytes()][experiential_action])
 
 
         return next_environmental_state, environmental_reward, done, info
