@@ -6,7 +6,7 @@ from util.bitmask import BitMask
 import matplotlib.pyplot as plt
 
 class IMTAgent():
-    def __init__(self, obs_size: int, action_size: int, alpha: float, gamma: float, epsilon: float, target_value=0.1, window_size: int = 20):
+    def __init__(self, obs_size: int, action_size: int, alpha: float, gamma: float, epsilon: float, retries=1, target_value=0, window_size: int = 20):
 
         self.obs_size = obs_size
         self.action_size = action_size
@@ -24,6 +24,7 @@ class IMTAgent():
 
         self.affordance_model = Q_Table(3, alpha, gamma, epsilon)
         self.affordance_mask = BitMask(action_size, random=True)
+        self.retries = retries
 
         self.experiential_model = Q_Table(
             self.action_size, alpha, gamma, epsilon)
@@ -52,8 +53,8 @@ class IMTAgent():
     def concatenate_state(self, *args):
         return np.append(args[0], args[1:])
 
-    def trim_environmental_state(self, env_state, atten_mask):
-        return np.asarray([val for ind, val in enumerate(env_state) if not atten_mask.bits[ind]])
+    def mask_environmental_state(self, env_state):
+        return np.asarray([val for ind, val in enumerate(env_state) if not self.attentional_mask.bits[ind]])
 
 # stochastic switch bits
     def step(self, env: gym.Env, environmental_state: np.array):
@@ -98,18 +99,15 @@ class IMTAgent():
 
         # experiential model
         # mask state attentional here
-        environmental_state = self.trim_environmental_state(environmental_state, self.attentional_mask)
+        masked_environmental_state = self.mask_environmental_state(environmental_state)
 
-        experiential_state = self.concatenate_state(environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
-        experiential_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
-
-        retries = 1
-        for i in range(retries + 1):
-            if self.affordance_mask[experiential_action]:
-                experiential_action = self.action_size - 1
-            else:
+        experiential_state = self.concatenate_state(masked_environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
+        for i in range(self.retries + 1):
+            experiential_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
+            if not self.affordance_mask[experiential_action]:
                 break
-        # mask action here
+        else:
+            experiential_action = self.action_size - 1
 
         try:
             next_environmental_state, environmental_reward, done, info = env.step(experiential_action)
