@@ -80,7 +80,7 @@ class IMTAgent():
         subgoal_state = self.concatenate_state(environmental_state, emotive_action, arousal_action,)
         subgoal_action = self.goal_model.get_action(subgoal_state, np.random.choice([-1, 0, 1]))
         self.subgoal_idx += subgoal_action
-        self.subgoal_idx = self.clamp(self.subgoal_idx, 0, len(self.visited_states))
+        self.subgoal_idx = self.clamp(self.subgoal_idx, 0, len(self.visited_states)-1)
 
         # attentional model
         attentional_action = self.attentional_model.get_action(environmental_state, np.random.choice([-1, 0, 1]))
@@ -102,18 +102,16 @@ class IMTAgent():
         masked_environmental_state = self.mask_environmental_state(environmental_state)
 
         experiential_state = self.concatenate_state(masked_environmental_state, emotive_action, arousal_action, self.subgoal_idx,)
-        for i in range(self.retries + 1):
-            experiential_action = self.experiential_model.get_action(experiential_state, env.action_space.sample())
-            if not self.affordance_mask[experiential_action]:
+        for _ in range(self.retries + 1):
+            experiential_action = self.experiential_model.get_action(experiential_state, env.uniform_random_action())
+            if not self.affordance_mask.bits[experiential_action]:
                 break
         else:
             experiential_action = self.action_size - 1
 
-        try:
-            next_environmental_state, environmental_reward, done, info = env.step(experiential_action)
-        except AssertionError: # invalid move
-            # do you change experiential action or keep it and have the rewards be from passing?
-            next_environmental_state, environmental_reward, done, info = env.step(self.action_size - 1)
+        while not env.valid_moves()[experiential_action]:
+            experiential_action = env.uniform_random_action() # force random action if action is illegal
+        next_environmental_state, environmental_reward, done, info = env.step(experiential_action)
 
         # todo find out how the next state is updated
         next_subgoal_state = self.concatenate_state(next_environmental_state, emotive_action, arousal_action,)
@@ -140,59 +138,3 @@ class IMTAgent():
 
 
         return next_environmental_state, environmental_reward, done, info
-
-
-    # function for running through the episodes
-#     def run(self, env, num_episodes=1000, render=False):
-#         rewards = []
-#         for episode in range(num_episodes):
-#             # print(f'starting episode {episode}')
-
-#             environmental_state = env.reset()
-
-#             if render:
-#                 env.render()
-
-#             subgoal_idx = 0  # np.random.choice(np.arange(self.obs_size))
-#             attentional_mask = BitMask(self.obs_size, random=True)
-#             affordance_mask = BitMask(self.action_size, random=True)
-#             arousal_state, emotive_state = None, None
-#             arousal_action, emotive_action = (0, 0)
-#             environmental_reward = None
-
-#             done = False
-#             iterations = 0
-#             total_reward = 0
-#             while not done:
-#                 environmental_reward, environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx = self.agent_step(environmental_state, arousal_state, arousal_action, emotive_state, emotive_action, subgoal_idx, render)
-#                 total_reward += environmental_reward
-#                 iterations += 1
-                
-
-#             rewards.append(total_reward)
-#             print(f'finished episode {episode}, total reward={total_reward}')
-
-#         win = [x for x in rewards if x == 1]
-#         tie = [x for x in rewards if x == 0]
-#         loss = [x for x in rewards if x == -1]
-#         print(f'WIN%: {len(win)/len(rewards)}')
-#         print(f'TIE%: {len(tie)/len(rewards)}')
-#         print(f'LOSS%: {len(loss)/len(rewards)}')
-#         print(f'AVERAGE REWARD: {np.mean(rewards)}')
-#         # plt.plot(rewards)
-#         # plt.show()
-#         return rewards
-
-
-# if __name__ == '__main__':
-#     np.random.seed(42069)
-#     # env = gym.make("Blackjack-v1")
-#     env = gym.make('gym_go:go-v0', size=7, komi=0)
-#     agent = IMTAgent(25,26, alpha=0.1, gamma=0.9, epsilon=0.1)
-#     agent.run(env, num_episodes=100000)
-
-
-# # bucket space in 1000s
-# # influence map
-# # distance
-# # internal r (new state close to the subgoal)

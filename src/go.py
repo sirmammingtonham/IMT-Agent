@@ -1,8 +1,10 @@
 import gym
+import random
+import logging
 import numpy as np
+from tqdm import trange
 from imt_agent import IMTAgent
 from qtable_agent import QAgent
-from util.bitmask import BitMask
 
 
 class GoWrapper(gym.ObservationWrapper):
@@ -24,15 +26,22 @@ class GoWrapper(gym.ObservationWrapper):
 
         return new_obs
 
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+
     # Go test with qAgents running against each other
     EPISODES = 500
     SIZE = 5
     RENDER = False
+    SEED = 42069
+    np.random.seed(SEED)
+    random.seed(SEED)
 
     env = GoWrapper(gym.make('gym_go:go-v0', size=SIZE,
                              komi=0, reward_method='heuristic'))
+    env.seed(SEED)
+    env.action_space.seed(SEED)
+
     obs_size = len(env.observation_space)
     action_size = env.action_space.n
 
@@ -46,34 +55,34 @@ if __name__ == '__main__':
     q_rewards = []
 
     game_status = []
-    for episode in range(EPISODES):
-        state = env.reset()
-        if RENDER:
-            env.render()
 
+    progress_bar = trange(EPISODES)
+    for episode in progress_bar:
+        state = env.reset()
         done = False
         iterations = 0
         while not done:
-            state, reward, done, _ = imt_agent.step(env, state)
-            imt_rewards.append(reward)
-
-            if done:
-                print('reward:', reward)
-                break
-
             state, reward, done, _ = q_agent.step(env, state)
             q_rewards.append(reward)
 
-            if RENDER:
-                env.render()
+            if done:
+                break
+
+            state, reward, done, _ = imt_agent.step(env, state)
+            imt_rewards.append(reward)
 
         game_status.append(reward)
-        print(f'finished episode {episode}, result={reward}')
+        win = [x for x in game_status if x < 0]
+        tie = [x for x in game_status if x == 0]
+        loss = [x for x in game_status if x > 0]
+        progress_bar.set_description(f'WIN%: {len(win)/len(game_status):.2f}, TIE%: {len(tie)/len(game_status):.2f}, LOSS%: {len(loss)/len(game_status):.2f}')
+        if RENDER:
+            env.render('terminal')
 
-    win = [x for x in game_status if x > 0]
+    win = [x for x in game_status if x < 0]
     tie = [x for x in game_status if x == 0]
-    loss = [x for x in game_status if x < 0]
-    print(f'WIN%: {len(win)/len(game_status)}')
-    print(f'TIE%: {len(tie)/len(game_status)}')
-    print(f'LOSS%: {len(loss)/len(game_status)}')
-    print(f'AVERAGE REWARD: {np.mean(game_status)}')
+    loss = [x for x in game_status if x > 0]
+    print(f'WIN%: {len(win)/len(game_status):.2f}')
+    print(f'TIE%: {len(tie)/len(game_status):.2f}')
+    print(f'LOSS%: {len(loss)/len(game_status):.2f}')
+    print(f'AVERAGE REWARD: {np.mean(game_status):.2f}')

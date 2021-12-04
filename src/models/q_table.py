@@ -1,10 +1,10 @@
 import numpy as np
-from collections import defaultdict
+from util.dict_wrapper import DictLogger
 
 class Q_Table():
     def __init__(self, action_size, alpha: float, gamma: float, epsilon: float):
         # self.Q = np.zeros(state_space)
-        self.Q = defaultdict(lambda: np.zeros(action_size))
+        self.Q = DictLogger(lambda: np.zeros(action_size))
         self.alpha = alpha
         self.gamma = gamma  # discount factor
         self.epsilon = epsilon
