@@ -1,4 +1,6 @@
-import sys
+import os, sys
+sys.path.append(f'{os.path.dirname(os.path.realpath(__file__))}/GymGo')
+
 import gym
 import random
 import logging
@@ -6,7 +8,6 @@ import numpy as np
 from tqdm import trange
 from imt_agent import IMTAgent
 from qtable_agent import QAgent
-
 
 class GoWrapper(gym.ObservationWrapper):
     def __init__(self, env=None):
@@ -54,10 +55,9 @@ def run(black, white, SEED = 42069):
     game_status = []
 
     progress_bar = trange(EPISODES)
-    for episode in progress_bar:
+    for _ in progress_bar:
         state = env.reset()
         done = False
-        iterations = 0
         while not done:
             state, reward, done, _ = black.step(env, state)
             black_rewards.append(reward)
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     win_list, tie_list, loss_list = [], [], []
 
     for _ in range(50):
-        SEED = random.randint(0, sys.maxint)
+        SEED = random.randint(0, 2**32 - 1)
 
         win, tie, loss = run(IMTAgent, QAgent, SEED)
         
