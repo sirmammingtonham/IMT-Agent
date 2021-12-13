@@ -1,3 +1,3 @@
-[submodule "src/GymGo"]
-	path = src/GymGo
-	url = https://github.com/aigagror/GymGo
+[submodule "GymGo"]
+	path = GymGo
+	url = https://github.com/aigagror/GymGo.git

@@ -10,7 +10,10 @@ Integrated Multi-Task Reinforcement Learning Agent Architecture
 	* installs all the required packages
 
 3. `conda activate IMT-Agent`
-	* activate the environment
+	* activate the conda environment
+
+4. `pip install GymGo/.`
+	* install the gym_go environment
 
 ## Running
 

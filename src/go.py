@@ -1,6 +1,3 @@
-import os, sys
-sys.path.append(f'{os.path.dirname(os.path.realpath(__file__))}/GymGo')
-
 import gym
 import random
 import logging
