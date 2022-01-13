@@ -25,11 +25,9 @@ class GoWrapper(gym.ObservationWrapper):
 
         return new_obs
 
-def run(black, white, SEED = 42069):
+def run(black, white, SEED = 42069, EPISODES = 10000):
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
-    # Go test with qAgents running against each other
-    EPISODES = 500
     SIZE = 5
     RENDER = False
     np.random.seed(SEED)
@@ -66,31 +64,53 @@ def run(black, white, SEED = 42069):
             white_rewards.append(reward)
 
         game_status.append(reward)
-        win = [x for x in game_status if x > 0]
+        black_win = [x for x in game_status if x > 0]
         tie = [x for x in game_status if x == 0]
-        loss = [x for x in game_status if x < 0]
-        progress_bar.set_description(f'WIN%: {len(win)/len(game_status):.2f}, TIE%: {len(tie)/len(game_status):.2f}, LOSS%: {len(loss)/len(game_status):.2f}')
+        white_win = [x for x in game_status if x < 0]
+        progress_bar.set_description(f'BLACK WIN%: {len(black_win)/len(game_status):.2f}, TIE%: {len(tie)/len(game_status):.2f}, WHITE WIN%: {len(white_win)/len(game_status):.2f}')
         if RENDER:
             env.render('terminal')
 
-    win = [x for x in game_status if x > 0]
-    tie = [x for x in game_status if x == 0]
-    loss = [x for x in game_status if x < 0]
+    # if isinstance(black, IMTAgent):
+    #     imt = black
+    #     qtable = white
+    # else:
+    #     qtable = black
+    #     imt = white
+    # print('IMT REVISIT %:', imt.experiential_model.revisit_counter / imt.experiential_model.update_counter)
+    # print('QTABLE REVISIT %:', qtable.model.revisit_counter / qtable.model.update_counter)
 
-    return win, tie, loss
+    print('BLACK QTABLE REVISIT %:', black.model.revisit_counter / black.model.update_counter)
+    print('WHITE QTABLE REVISIT %:', white.model.revisit_counter / white.model.update_counter)
+
+    black_win = [x for x in game_status if x > 0]
+    tie = [x for x in game_status if x == 0]
+    white_win = [x for x in game_status if x < 0]
+
+    return len(black_win), len(tie), len(white_win)
 
 if __name__ == '__main__':
-    win_list, tie_list, loss_list = [], [], []
+    wins, ties, losses = 0, 0, 0
+    ITERATIONS = 2
+    EPISODES = 1000000
+    SEED = 240
 
-    for _ in range(50):
-        SEED = random.randint(0, 2**32 - 1)
+    # run with imt agent first
+    black_wins, tie, white_wins = run(QAgent, QAgent, SEED, EPISODES)
 
-        win, tie, loss = run(IMTAgent, QAgent, SEED)
-        
-        win_list.append(win)
-        tie_list.append(tie)
-        loss_list.append(loss)
+    wins += black_wins
+    ties += tie
+    losses += white_wins
 
-    print(f'WIN%: {sum(win_list)/len(win_list):.2f}')
-    print(f'TIE%: {sum(tie_list)/len(tie_list):.2f}')
-    print(f'LOSS%: {sum(loss_list)/len(loss_list):.2f}')
+    # run with imt agent second
+    # black_wins, tie, white_wins = run(QAgent, IMTAgent, SEED, EPISODES)
+
+    # wins += white_wins
+    # ties += tie
+    # losses += black_wins
+
+    total = EPISODES*1
+    print()
+    print(f'IMT_AGENT WIN%: {wins/total:.2f}')
+    print(f'TIE%: {ties/total:.2f}')
+    print(f'IMT_AGENT LOSS%: {losses/total:.2f}')

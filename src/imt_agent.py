@@ -3,7 +3,6 @@ import collections
 import numpy as np
 from models.q_table import Q_Table
 from util.bitmask import BitMask
-import matplotlib.pyplot as plt
 
 class IMTAgent():
     def __init__(self, obs_size: int, action_size: int, alpha: float, gamma: float, epsilon: float, retries=1, target_value=0, window_size: int = 20):

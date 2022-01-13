@@ -8,6 +8,8 @@ class Q_Table():
         self.alpha = alpha
         self.gamma = gamma  # discount factor
         self.epsilon = epsilon
+        self.update_counter = 0
+        self.revisit_counter = 0
 
     def get_alpha(self, timestep=None):
         ## in case we want to implement decay
@@ -28,6 +30,10 @@ class Q_Table():
             return np.argmax(self.Q[state.tobytes()])
 
     def calculate_q(self, state, action, reward, next_state):
+        self.update_counter += 1
+        if self.Q[state.tobytes()][action] != 0:
+            self.revisit_counter += 1
+        #     print('updating a q value')
         return self.Q[state.tobytes()][action] + self.get_alpha() * (
             reward + self.gamma * np.max(self.Q[next_state.tobytes()])
             - self.Q[state.tobytes()][action]

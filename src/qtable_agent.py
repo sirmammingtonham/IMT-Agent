@@ -1,7 +1,6 @@
 import gym
 import numpy as np
 from models.q_table import Q_Table
-import matplotlib.pyplot as plt
 from observation_wrapper import ObservationWrapper
 
 # todo convert all of this to pytorch so we can use autograd :)
