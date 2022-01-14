@@ -25,13 +25,12 @@ class GoWrapper(gym.ObservationWrapper):
 
         return new_obs
 
-def run(black, white, SEED = 42069, EPISODES = 10000):
+def run(Black, White, SEED = 42069, EPISODES = 10000):
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
     SIZE = 5
     RENDER = False
     np.random.seed(SEED)
-    
 
     env = GoWrapper(gym.make('gym_go:go-v0', size=SIZE,
                              komi=0, reward_method='heuristic'))
@@ -41,10 +40,10 @@ def run(black, white, SEED = 42069, EPISODES = 10000):
     obs_size = len(env.observation_space)
     action_size = env.action_space.n
 
-    black = black(obs_size, action_size, alpha=0.1, gamma=0.9, epsilon=0.1)
+    black = Black(obs_size, action_size, alpha=0.1, gamma=0.9, epsilon=0.1)
     black_rewards = []
 
-    white = white(obs_size, action_size, alpha=0.1, gamma=0.9, epsilon=0.1)
+    white = White(obs_size, action_size, alpha=0.1, gamma=0.9, epsilon=0.1)
     white_rewards = []
 
     game_status = []
@@ -109,7 +108,7 @@ if __name__ == '__main__':
     # ties += tie
     # losses += black_wins
 
-    total = EPISODES*1
+    total = EPISODES*ITERATIONS
     print()
     print(f'IMT_AGENT WIN%: {wins/total:.2f}')
     print(f'TIE%: {ties/total:.2f}')
