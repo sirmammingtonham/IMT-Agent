@@ -11,8 +11,8 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common import results_plotter
 
-from src.imt_agent import IMTAgent
-from src.qtable_agent import QAgent
+from agents.imt_agent import IMTAgent
+from agents.qtable_agent import QAgent
 
 str_to_model = {
     'dqn': DQN,

@@ -3,8 +3,8 @@ import random
 import logging
 import numpy as np
 from tqdm import trange
-from imt_agent import IMTAgent
-from qtable_agent import QAgent
+from agents.imt_agent import IMTAgent
+from agents.qtable_agent import QAgent
 
 
 class CartpoleWrapper(gym.ObservationWrapper):

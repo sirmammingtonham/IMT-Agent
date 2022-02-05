@@ -16,6 +16,9 @@ class QAgent():
 
         while not env.valid_moves()[action]:
             action = env.uniform_random_action() # force random action if action is illegal
+            if isinstance(action, np.ndarray): # break if action is an array( i.e. trading environment, there are no invalid actions)
+                break
+
         next_state, reward, done, info = env.step(action)
 
         self.model.update_q(state, action, reward, next_state)
